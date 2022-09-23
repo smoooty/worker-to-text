@@ -1,4 +1,5 @@
-use text_to_png::{TextPng, TextRenderer};
+use image::ImageOutputFormat;
+use og_image_writer::{style, writer::OGImageWriter};
 use worker::*;
 
 mod utils;
@@ -23,10 +24,6 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
 }
 
 async fn handle_slash(text: String) -> Result<Response> {
-    let renderer =
-        TextRenderer::try_new_with_ttf_font_data(include_bytes!("../assets/SKRAPPA.ttf"))
-            .expect("Example font is definitely loadable");
-
     let text = if text.len() > 128 {
         "Nope".into()
     } else {
@@ -35,12 +32,42 @@ async fn handle_slash(text: String) -> Result<Response> {
 
     let text = urlencoding::decode(&text).map_err(|_| worker::Error::BadEncoding)?;
 
-    let text_png: TextPng = renderer
-        .render_text_to_png_data(text.replace("+", " "), 100, "003682")
-        .unwrap();
+    let mut writer = OGImageWriter::new(style::WindowStyle {
+        width: 1024,
+        height: 512,
+        background_color: Some(style::Rgba([70, 40, 90, 255])),
+        align_items: style::AlignItems::Center,
+        justify_content: style::JustifyContent::Center,
+        ..style::WindowStyle::default()
+    })
+    .map_err(|_| worker::Error::BadEncoding)?;
+
+    let font = Vec::from(include_bytes!("../assets/SKRAPPA.ttf") as &[u8]);
+
+    writer
+        .set_text(
+            &text,
+            style::Style {
+                margin: style::Margin(0, 20, 0, 20),
+                line_height: 1.8,
+                font_size: 100.,
+                word_break: style::WordBreak::Normal,
+                color: style::Rgba([255, 255, 255, 255]),
+                text_align: style::TextAlign::Start,
+                ..style::Style::default()
+            },
+            Some(font.clone()),
+        )
+        .map_err(|_| worker::Error::BadEncoding)?;
+
+    writer.paint().map_err(|_| worker::Error::BadEncoding)?;
+
+    let img = writer
+        .encode(ImageOutputFormat::Png)
+        .map_err(|_| worker::Error::BadEncoding)?;
 
     let mut headers = Headers::new();
     headers.set("content-type", "image/png")?;
 
-    Ok(Response::from_bytes(text_png.data)?.with_headers(headers))
+    Ok(Response::from_bytes(img)?.with_headers(headers))
 }
