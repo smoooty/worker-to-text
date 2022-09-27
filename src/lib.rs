@@ -14,24 +14,35 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
     router
         .get_async("/", |req, _| async move {
             if let Some(text) = req.url()?.query() {
-                handle_slash(text.into()).await
+                handle_request(text.into()).await
             } else {
-                handle_slash("Hello Worker!".into()).await
+                handle_request("Hello Worker!".into()).await
             }
         })
         .run(req, env)
         .await
 }
 
-async fn handle_slash(text: String) -> Result<Response> {
+async fn handle_request(text: String) -> Result<Response> {
     let text = if text.len() > 128 {
         "Nope".into()
     } else {
         text
     };
 
-    let text = urlencoding::decode(&text).map_err(|_| worker::Error::BadEncoding)?;
+    let text = urlencoding::decode(&text)
+        .map_err(|_| worker::Error::BadEncoding)
+        .unwrap();
 
+    let img = generate_image(&text).map_err(|_| worker::Error::BadEncoding)?;
+
+    let mut headers = Headers::new();
+    headers.set("content-type", "image/png")?;
+
+    Ok(Response::from_bytes(img)?.with_headers(headers))
+}
+
+fn generate_image(text: &str) -> Result<Vec<u8>> {
     let mut writer = OGImageWriter::new(style::WindowStyle {
         width: 1024,
         height: 512,
@@ -66,8 +77,5 @@ async fn handle_slash(text: String) -> Result<Response> {
         .encode(ImageOutputFormat::Png)
         .map_err(|_| worker::Error::BadEncoding)?;
 
-    let mut headers = Headers::new();
-    headers.set("content-type", "image/png")?;
-
-    Ok(Response::from_bytes(img)?.with_headers(headers))
+    Ok(img)
 }
