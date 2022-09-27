@@ -34,7 +34,7 @@ async fn handle_request(text: String) -> Result<Response> {
         .map_err(|_| worker::Error::BadEncoding)
         .unwrap();
 
-    let img = generate_image(&text).map_err(|_| worker::Error::BadEncoding)?;
+    let img = generate_image(&text).expect("image created");
 
     let mut headers = Headers::new();
     headers.set("content-type", "image/png")?;
@@ -51,7 +51,7 @@ fn generate_image(text: &str) -> Result<Vec<u8>> {
         justify_content: style::JustifyContent::Center,
         ..style::WindowStyle::default()
     })
-    .map_err(|_| worker::Error::BadEncoding)?;
+    .expect("intialize writer");
 
     let font = Vec::from(include_bytes!("../assets/SKRAPPA.ttf") as &[u8]);
 
@@ -69,13 +69,11 @@ fn generate_image(text: &str) -> Result<Vec<u8>> {
             },
             Some(font.clone()),
         )
-        .map_err(|_| worker::Error::BadEncoding)?;
+        .expect("set text");
 
-    writer.paint().map_err(|_| worker::Error::BadEncoding)?;
+    writer.paint().expect("paint img");
 
-    let img = writer
-        .encode(ImageOutputFormat::Png)
-        .map_err(|_| worker::Error::BadEncoding)?;
+    let img = writer.encode(ImageOutputFormat::Png).expect("encode png");
 
     Ok(img)
 }
